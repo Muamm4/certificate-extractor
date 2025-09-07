@@ -1,45 +1,70 @@
+import { Head, useForm } from '@inertiajs/react';
 import React from 'react';
-import { useForm, Head } from '@inertiajs/react';
 
-import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Icon } from '@/components/ui/icon';
 import { Download, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { z } from 'zod';
 
-// Define the shape of the result prop
 interface Result {
     id: string;
     validTo: string;
     details: any;
 }
 
-// Define the page props interface
+type FormData = {
+    certificate: File | null;
+    password: string;
+};
+
 type ExtractorPageProps = {
     result?: Result;
-    flash?: { 
+    flash?: {
         error?: string;
     };
-}
+};
+
+const schema = z.object({
+    certificate: z.any().refine((file) => file instanceof File, { message: 'Arquivo obrigatório' }),
+    password: z.string().min(1, 'Senha obrigatória'),
+});
 
 export default function Extractor({ result, flash }: ExtractorPageProps) {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, setError } = useForm<FormData>({
         certificate: null as File | null,
         password: '',
     });
 
     function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
+
+        const check = schema.safeParse(data);
+
+        if (!check.success) {
+            const fieldErrors = check.error.format();
+            
+            if (fieldErrors.certificate?._errors?.[0]) {
+                setError('certificate', fieldErrors.certificate._errors[0]);
+            }
+            
+            if (fieldErrors.password?._errors?.[0]) {
+                setError('password', fieldErrors.password._errors[0]);
+            }
+
+            return;
+        }
+
         post('/upload', {
             forceFormData: true,
         });
     }
 
     return (
-        <div className="min-h-screen w-full flex items-center justify-center bg-gray-100 dark:bg-zinc-950 p-4">
+        <div className="flex min-h-screen w-full items-center justify-center bg-gray-100 p-4 dark:bg-zinc-950">
             <Head title="Certificate Extractor" />
 
             <Card className="w-full max-w-2xl">
@@ -62,6 +87,7 @@ export default function Extractor({ result, flash }: ExtractorPageProps) {
                             <Input
                                 id="certificate"
                                 type="file"
+                                accept=".pfx,.p12"
                                 onChange={(e) => setData('certificate', e.target.files ? e.target.files[0] : null)}
                                 required
                             />
@@ -84,11 +110,11 @@ export default function Extractor({ result, flash }: ExtractorPageProps) {
                         <div className="mt-6 border-t pt-6">
                             <h3 className="text-lg font-semibold">Extraction Successful</h3>
                             <div className="mt-4 space-y-3">
-                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                                <div className="flex items-center justify-between rounded-md bg-gray-50 p-3 dark:bg-gray-800">
                                     <span className="font-semibold">Expires on:</span>
                                     <span className="font-mono text-sm">{result.validTo}</span>
                                 </div>
-                                <div className="flex flex-col sm:flex-row justify-center items-center space-y-2 sm:space-y-0 sm:space-x-2 pt-2">
+                                <div className="flex flex-col items-center justify-center space-y-2 pt-2 sm:flex-row sm:space-y-0 sm:space-x-2">
                                     <Button asChild variant="outline" className="w-full">
                                         <a href={`/download/${result.id}/certificate`}>
                                             <Icon iconNode={Download} className="mr-2 h-4 w-4" />
@@ -110,7 +136,7 @@ export default function Extractor({ result, flash }: ExtractorPageProps) {
                                 </div>
                                 <div className="pt-2">
                                     <h4 className="font-semibold">Certificate Details:</h4>
-                                    <pre className="mt-2 p-2 rounded-md bg-gray-950 text-white text-xs overflow-auto h-48">
+                                    <pre className="mt-2 h-48 overflow-auto rounded-md bg-gray-950 p-2 text-xs text-white">
                                         {JSON.stringify(result.details, null, 2)}
                                     </pre>
                                 </div>
